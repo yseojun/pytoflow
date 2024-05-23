@@ -59,14 +59,11 @@ def Estimate(net, tensorFirst=None, tensorSecond=None, Firstfilename='', Secondf
         tensorFirst = torch.FloatTensor(np.array(PIL.Image.open(Firstfilename).convert("RGB")).transpose(2, 0, 1).astype(np.float32) * (1.0 / 255.0))
         tensorSecond = torch.FloatTensor(np.array(PIL.Image.open(Secondfilename).convert("RGB")).transpose(2, 0, 1).astype(np.float32) * (1.0 / 255.0))
 
-    mat_file   = io.loadmat(Firstflowname)
-#    flowFirst  = mat_file['OutFlowF']
-    flowFirst  = mat_file['save_outflowF']
-    flowFirst  = torch.from_numpy(flowFirst.astype(np.float32))
-    mat_file   = io.loadmat(Secondflowname)
-#    flowSecond = mat_file['OutFlowB']
-    flowSecond = mat_file['save_outflowB']
-    flowSecond = torch.from_numpy(flowSecond.astype(np.float32))
+    flowFirst = np.load(Firstflowname).astype(np.float32)
+    flowFirst = torch.from_numpy(flowFirst)
+    flowSecond = np.load(Secondflowname).astype(np.float32)
+    flowSecond = torch.from_numpy(flowSecond)
+
 
     tensorOutput = torch.FloatTensor()
 
