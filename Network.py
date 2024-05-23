@@ -1,5 +1,6 @@
 import math
 import torch
+import time
 # import torch.utils.serialization   # it was removed in torch v1.0.0 or higher version.
 
 arguments_strModel = 'sintel-final'
@@ -198,14 +199,16 @@ class TOFlow(torch.nn.Module):
         self.ResNet = ResNet(task=self.task)
 
     # frames should be TensorFloat
-    def forward(self, frames):
+    def forward(self, frames, flows):
         """
         :param frames: [batch_size=1, img_num, n_channels=3, h, w]
         :return:
         """
+        s1 = time.time()
         for i in range(frames.size(1)):
             frames[:, i, :, :, :] = normalize(frames[:, i, :, :, :])
-
+        e1 = time.time()
+        s2 = time.time()
         if self.cuda_flag:
             opticalflows = torch.zeros(frames.size(0), frames.size(1), 2, frames.size(3), frames.size(4)).cuda()
             warpframes = torch.empty(frames.size(0), frames.size(1), 3, frames.size(3), frames.size(4)).cuda()
@@ -213,6 +216,8 @@ class TOFlow(torch.nn.Module):
             opticalflows = torch.zeros(frames.size(0), frames.size(1), 2, frames.size(3), frames.size(4))
             warpframes = torch.empty(frames.size(0), frames.size(1), 3, frames.size(3), frames.size(4))
 
+        e2 = time.time()
+        s3 = time.time()
         if self.task == 'interp':
             process_index = [0, 1]
             opticalflows[:, 1, :, :, :] = self.SpyNet(frames[:, 0, :, :, :], frames[:, 1, :, :, :]) / 2
@@ -226,13 +231,39 @@ class TOFlow(torch.nn.Module):
         else:
             raise NameError('Only support: [interp, denoise/denoising, sr/super-resolution]')
 
-        for i in process_index:
-            warpframes[:, i, :, :, :] = self.warp(frames[:, i, :, :, :], opticalflows[:, i, :, :, :])
+        e3 = time.time()
+        opticalflows[:, 0, 0, :, :] = 0
+#        opticalflows[:, 0, 1, :, :] = -flows[:, 0, :, :, :]/2
+        opticalflows[:, 0, 1, :, :] = flows[:, 0, :, :, :]
+        opticalflows[:, 1, 0, :, :] = 0
+#        opticalflows[:, 1, 1, :, :] = -flows[:, 1, :, :, :]/2
+        opticalflows[:, 1, 1, :, :] = flows[:, 1, :, :, :]
+
+
+# minus for zero direction
+
+#        for i in process_index:
+#            warpframes[:, i, :, :, :] = self.warp(frames[:, i, :, :, :], opticalflows[:, i, :, :, :])
+        s4 = time.time()
+        warpframes[:, 0, :, :, :] = self.warp(frames[:, 0, :, :, :], opticalflows[:, 0, :, :, :])
+        warpframes[:, 1, :, :, :] = self.warp(frames[:, 1, :, :, :], opticalflows[:, 1, :, :, :])
+        e4 = time.time()
         # warpframes: [batch_size=1, img_num=7, n_channels=3, height=256, width=448]
 
+        s5 = time.time()
         Img = self.ResNet(warpframes)
+        e5 = time.time()
         # Img: [batch_size=1, n_channels=3, h, w]
 
+        s6 = time.time()
         Img = denormalize(Img)
+        e6 = time.time()
+
+        print("check point 1 : " + str(e1 - s1) + "s")
+        print("check point 2 : " + str(e2 - s2) + "s")
+        print("check point 3 : " + str(e3 - s3) + "s")
+        print("check point 4 : " + str(e4 - s4) + "s")
+        print("check point 5 : " + str(e5 - s5) + "s")
+        print("check point 6 : " + str(e6 - s6) + "s")
 
         return Img
